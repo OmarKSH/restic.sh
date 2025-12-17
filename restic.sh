@@ -1,8 +1,8 @@
-#!/bin/sh
+#!/bin/bash
 
 #set -e #it causes the calling shell to exit when in source mode
 
-cleanup() { [ -n "$OLD_PATH" ] && PATH="$OLD_PATH"; rm -rf "$bins_dir" "$restic" 2>/dev/null; unset BOOTMODE OLD_PATH SELF_NAME SELF SOURCE_DOTENV REPLY pwd restic repos action RESTIC_REPOSITORY; }
+cleanup() { [ -n "$OLD_PATH" ] && PATH="$OLD_PATH"; rm -rf "$payload" 2>/dev/null; unset BOOTMODE OLD_PATH SELF_NAME SELF SOURCE_DOTENV REPLY pwd payload restic repos action RESTIC_REPOSITORY; }
 
 trap cleanup QUIT EXIT TERM
 trap 'cleanup; return 2>/dev/null || exit;' INT
@@ -72,7 +72,7 @@ find_execable_dir() {
 	local bins_dir=
 	for dir in "$TMPDIR" /tmp /dev /data/local/tmp "$pwd" "$PWD" ${PATH//:/ }; do
 		f="$dir/test"
-		[ -d "$dir" ] && touch "$f" && chmod +x "$f" && [ -x "$f" ] && rm -f "$f" && bins_dir="$dir" && break
+		[ -d "$dir" ] && touch "$f" 2>/dev/null && chmod +x "$f" && [ -x "$f" ] && rm -f "$f" && bins_dir="$dir" && break
 		rm -f "$f"
 	done
 	echo -n "$bins_dir"
@@ -120,35 +120,54 @@ get_payload_line() {
 }
 
 extract_payload_from() {
-	local bins_dir=`find_execable_dir`
+	local bins_dir="$(mktemp -p"$(find_execable_dir)" -d)"
 
 	local self="$0"
 	[ -n "$1" ] && self="$1"
 
-	local bin="$bins_dir/resticoasdklf"
-	local payload_line=`get_payload_line "$self"`
+	local payload="$(mktemp -p"$bins_dir" -u)"
+	local payload_line="$(get_payload_line "$self")"
 
-	tail -n+$((payload_line+1)) "$self" > "$bin"
+	tail -n+$((payload_line+1)) "$self" > "$payload"
 
-	chmod +x "$bin"
-	echo -n "$bin"
+	chmod -R u+x "$bins_dir"
+
+	OLD_PWD="$PWD"
+	cd "${payload%/*}"
+	# if the payload is 7z then use it to extract the archive contents
+	#"$payload" x "$payload" >/dev/null 2>/dev/null && mv "$payload" "${payload%/*}/7z" && payload="${payload%/*}" && chmod -R u+x "$payload"
+	# extract sfx payload
+	export UNZIP_DISABLE_ZIPBOMB_DETECTION=TRUE
+	{ "$payload" x "$payload" || "$payload" "$payload" || "$payload"; } >/dev/null 2>/dev/null \
+		&& rm "$payload" && payload="${payload%/*}" && chmod -R u+x "$payload"
+	cd "$OLD_PWD"
+
+	echo -n "$(realpath "$payload" 2>/dev/null)"
 }
 
 split_from() {
 	local self="$0"
 	[ -n "$1" ] && self="$1"
+	selfname="${self##*/}"
 
-	local payload_line=`get_payload_line "$self"`
+	local payload_line="$(get_payload_line "$self")"
 
-	head -n$payload_line "$self" > "$self.script"
-	tail -n+$((payload_line+1)) "$self" > "$self.bin"
+	tail -n+$((payload_line+1)) "$self" > "$PWD/${selfname}.payload"
+
+	head -n$payload_line "$self" > "$PWD/$selfname"_
+	chmod `stat -c '%a' "$self"` "$PWD/${selfname}"_ "$PWD/${selfname}.payload"
+	mv "$PWD/${selfname}"_ "$PWD/${selfname}"
 }
 
 merge() {
 	local self="$0"
 	[ -n "$1" ] && self="$1"
+	selfdir="${self%/*}"
+	selfname="${self##*/}"
 
-	[ -r "$self.script" ] && [ -r "$self.bin" ] && cat "$self.script" "$self.bin" > "$self" 
+	[ -r "$PWD/${selfname}.payload" ] \
+		&& cat "$self" "$PWD/${selfname}.payload" > "$self"_  && { chmod `stat -c '%a' "$self"` "$self"_; mv "$self"_ "$self"; rm "$PWD/${selfname}.payload" || true; } \
+		|| echo "Cannot merge, payload \"$PWD/${selfname}.payload\" doesn't exist"
 }
 
 is_restic_repo() {
@@ -169,12 +188,13 @@ generate_recovery_script() {
 	echo '#MAGISK' > "$filedir"/META-INF/com/google/android/update-script
 	echo "id=$(basename "$file")" > "$filedir"/module.prop
 	cat <<- 'EOF' > "$filedir"/customize.sh
-	export PATH="$PATH:$MODPATH:/data/data/com.termux/files/usr/bin"
+	export PATH="$PATH:$MODPATH"
 	id="$(basename "$MODPATH")"
 
 	unzip -o -d "$MODPATH" "$ZIPFILE" || echo "Failed to extract required files"
+	chmod -R +x "$MODPATH"
 
-	if [ -z "$SHELL" ]; then #If executing from GUI
+	if [ ${#ANDROID_SOCKET_zygote} -gt 0 ]; then #If executing from GUI
 		logfile=/data/media/0/"$id".log
 
 		cp -a "$ZIPFILE" "$MODPATH"
@@ -279,9 +299,6 @@ generate_recovery_script() {
 	# Backup previous recovery archive
 	[ -f "$file" ] && mv "$file" "$file"_
 
-	# Use termux binaries if termux is installed
-	local PATH_BAK="$PATH"
-	PATH="$PATH:/data/data/com.termux/files/usr/bin"
 	# Create recovery archive
 	local OLD_PWD="$PWD"
 	cd "$filedir"
@@ -291,11 +308,13 @@ generate_recovery_script() {
 	|| { 7za && { 7za -mx=0 a "$file" "$SELF" META-INF module.prop customize.sh; true; } } } >/dev/null 2>/dev/null \
 	|| echo "Failed to create recovery archive $file, no archiving binaries available"
 	cd "$OLD_PWD"
-	# Restore PATH value
-	PATH="$PATH_BAK"
 
 	# Delete previous recovery archive if a new one was created
 	[ -f "$file" ] && rm -f "$file"_ || { [ -f "$file"_ ] && mv "$file"_ "$file"; }
+
+	# Set permissions
+	chown 0:0 "$file"
+	chmod 400 "$file"
 
 	# Cleanup
 	rm -rf "$filedir"/META-INF "$filedir"/module.prop "$filedir"/customize.sh
@@ -378,21 +397,6 @@ generate_recovery_restore_scripts() {
 }
 
 backup() {
-	##!/bin/sh
-	#
-	##set -e
-	#
-	#pwd=`dirname "$(realpath "$PWD/$0")"`
-	#[ -n "$BASH_SOURCE" ] && pwd=`dirname "$(realpath "${BASH_SOURCE}" 2>/dev/null)"`
-	#
-	#SOURCE_DOTENV=1 && . "$pwd/.env"
-	#unset pwd SOURCE_DOTENV
-
-	#export TMPDIR="$pwd/.tmp"
-	#export RESTIC_CACHE_DIR="$pwd/.cache"
-	#[ ! -e "$TMPDIR" ] && mkdir -p "$TMPDIR"; f
-	#[ ! -e "$RESTIC_CACHE_DIR" ] &&  mkdir -p "$RESTIC_CACHE_DIR"
-
 	local backup_path="$1"; [ -n "$1" ] && shift
 	local backup_paths="Enter paths manually\n/data -e /data/media\n/data/media"
 	while [ -z "$backup_path" ]; do echo 'Select backup string:' && backup_path="$(echo -e "$backup_paths" | select_from_list)"; done
@@ -411,16 +415,6 @@ backup() {
 }
 
 restore() {
-	##!/bin/sh
-	#
-	##set -e
-	#
-	#pwd=`dirname "$(realpath "$PWD/$0")"`
-	#[ -n "$BASH_SOURCE" ] && pwd=`dirname "$(realpath "${BASH_SOURCE}" 2>/dev/null)"`
-	#
-	#SOURCE_DOTENV=1 && . "$pwd/.env"
-	#unset pwd SOURCE_DOTENV
-
 	local id="$1"; [ -n "$1" ] && shift
 	if [ -z "$id" ]; then
 		echo 'Loading snapshots list...'
@@ -434,6 +428,8 @@ restore() {
 		while IFS= read -r line; do case "$line" in *[0-9]-[0-9]*) snapshots="$line\n$snapshots" ;; esac done <"$tmp"
 		rm "$tmp"
 
+		[ ${#snapshots} -le 0 ] && echo 'No snapshots available for restore' && return 1
+
 		while [ -z "$id" ]; do echo 'Select snapshot to be restored:'; id=`echo -e "$snapshots" | select_from_list` && id=${id%% *}; done
 	fi
 
@@ -446,7 +442,7 @@ restore() {
 	local excludes="-e '$RESTIC_REPOSITORY' -e /data/system/gatekeeper.password.key -e /data/system/gatekeeper.pattern.key -e /data/system/locksettings.db -e /data/system/locksettings.db-shm -e /data/system/locksettings.db-wal"
 
 	#echo -n 'Delete fingerprint data (y/N)? ' \
-	#	&& read -r REPLY && { [ "$REPLY" = 'y' ] || [ "$REPLY" = 'Y' ]; } \
+	#	&& read -r REPLY </dev/tty && { [ "$REPLY" = 'y' ] || [ "$REPLY" = 'Y' ]; } \
 	#	&& excludes="$excludes -e /data/system/users/0/fpdata -e /data/system/users/0/settings_fingerprint.xml" \
 	#	&& echo
 
@@ -460,48 +456,6 @@ nightly() {
 
 	"$restic" --no-cache forget --prune --keep-last 10 --keep-daily 7 --keep-weekly 5 --keep-monthly 12
 }
-
-#run_schedule() {
-#	local trigger_time_input="$1"; #shift
-#	local trigger_time_default="03:00"
-#	local trigger_time_file="$pwd/.$(basename "$0").TRIGGER_TIME"
-#
-#	local RESTIC_REPOSITORY_input="$1"; [ -n "$1" ] && shift
-#	local RESTIC_REPOSITORY_default=${RESTIC_REPOSITORY_input:-"$pwd/repo"}
-#	#local RESTIC_REPOSITORY_file="$pwd/.$(basename "$0").RESTIC_REPO"
-#	local RESTIC_REPOSITORY_file="$pwd/.$SELFNAME.RESTIC_REPO"
-#	export RESTIC_REPOSITORY="$RESTIC_REPOSITORY_default"
-#
-#	local RESTIC_PASSWORD_input="$1"; [ -n "$1" ] && shift
-#	local RESTIC_PASSWORD_default=${RESTIC_PASSWORD_input:-BUZZWORD}
-#	#local RESTIC_PASSWORD_file="$pwd/.$(basename "$0").RESTIC_PASS"
-#	local RESTIC_PASSWORD_file="$pwd/.$SELFNAME.RESTIC_PASS"
-#	export RESTIC_PASSWORD="$RESTIC_PASSWORD_default"
-#
-#	echo_schedule_banner
-#
-#	while true; do
-#		# make sure that the sleep time wont cause a skip
-#		# ex: the script should run at hour 00:00 but we
-#		# started sleeping at 23:59, so we must sleep for
-#		# less than a minute but at the same time sleep
-#		# long enough to not cause trigger multiple times
-#		# ex: if we sleep for 1 sec and run the script on
-#		# 00:00 then it will keep triggering for a whole
-#		# minute until 00:01
-#		local trigger_time="$trigger_time_default"
-#		{ [ -n "$trigger_time_input" ] && trigger_time="$trigger_time_input"; } \
-#		|| { [ -r "$trigger_time_file" ] && { read -r trigger_time <"$trigger_time_file" || true; } }
-#
-#		echo -e "\rPerform backup at $trigger_time, current time: $(date +%H:%M)"
-#
-#		[ "$(date +%H:%M)" = "$trigger_time" ] && nightly \
-#
-#		&& while [ "$(date +%H:%M)" = "$trigger_time" ]; do sleep 10; done # guard check to prevent multiple triggers
-#
-#		sleep 50
-#	done
-#}
 
 run_schedule() {
 	calculate_trigger_date() {
@@ -549,8 +503,13 @@ run_schedule() {
 	done
 }
 
-{ [ "$1" = 'split' ] && { split_from "$SELF"; { return $? 2>/dev/null || exit $?; } } } \
-|| { [ "$1" = 'merge' ] && { merge "$SELF"; { return $? 2>/dev/null || exit $?; } } }
+if [ "$1" = 'split' ]; then
+	split_from "$SELF"
+	return $? 2>/dev/null || exit $?
+elif [ "$1" = 'merge' ]; then
+	merge "$SELF"
+	return $? 2>/dev/null || exit $?
+fi
 
 # handle cases where TMPDIR is not defined
 export TMPDIR
@@ -558,37 +517,35 @@ for TMPDIR in "$TMPDIR" /tmp /dev /data/local/tmp "$pwd" "$PWD"; do
 	[ -w "$TMPDIR" ] && break
 done
 
-#bins_fullpath="$pwd/bin"
-#bins="$bins_fullpath/restic $bins_fullpath/fusermount $bins_fullpath/fzf"
-#case "$PATH" in
-#	*"$bins_fullpath"*) true ;;
-#	*) PATH="$PATH:$bins_fullpath" ;;
-#esac
-#remount_exec
-#bins_dir=load_bins_from "$bins_fullpath" $bins
-#restic=`command -v restic`
-#unset bins_fullpath bins
+payload="$(extract_payload_from "$SELF")"
+if [ -d "$payload" ]; then
+	export PATH="$payload:$PATH"
+	restic="$payload/restic"
+elif [ -f "$payload" ]; then
+	restic="$payload"
+else
+	echo "Failed to extract payload"
+	return 1 2>/dev/null || exit 1
+fi
 
-restic=`extract_payload_from "$SELF"`
+action="$1"
 
-# If on Android set RESTIC_HOST
-#export RESTIC_HOST="$(getprop ro.product.name 2>/dev/null)"
+[ -n "$action" -a -x "$payload/$action" ] && { shift; "$payload/$action" "$@"; unset action; return $? 2>/dev/null || exit $?; }
 
 export RESTIC_PASSWORD
 # If the password is piped to the script then read it into a variable
 [ ! -t 0 ] && IFS= read -r RESTIC_PASSWORD
 
-action="$1"
 case "$action" in
-	restic) shift; "$restic" "$@"; return $? 2>/dev/null || exit $? ;;
-	schedule) shift; run_schedule "$@"; return $? 2>/dev/null || exit $? ;;
+	#restic) unset action; shift; "$restic" "$@"; return $? 2>/dev/null || exit $? ;;
+	schedule) unset action; shift; run_schedule "$@"; return $? 2>/dev/null || exit $? ;;
 	nightly|backup|restore) shift ;; #those will be executed later in the script
 	*) unset action ;;
 esac
 
 export RESTIC_REPOSITORY=$1; [ -n "$1" ] && shift
 
-[ "$action" = 'nightly' ] && { nightly "$@"; { return $? 2>/dev/null || exit $?; } }
+[ "$action" = 'nightly' ] && { nightly "$@"; return $? 2>/dev/null || exit $?; }
 
 # Find the repos in the current directory and the directory where the script exists
 if [ -z "$RESTIC_REPOSITORY" ]; then
@@ -602,24 +559,21 @@ if [ -z "$RESTIC_REPOSITORY" ]; then
 	unset repos
 fi
 
-#[ -z "$RESTIC_REPOSITORY" ] && { echo "No restic repository found"; exit 2>/dev/null || return; }
-
 [ -z "$RESTIC_PASSWORD" ] && echo -e "\033[38;5;3mYou should source this script at least once instead of running it so that you won't have to input the password everytime\e[0m"
 while [ -z "$RESTIC_PASSWORD" ]; do echo -n 'Enter repo password: ' && { read -r -s RESTIC_PASSWORD 2>/dev/null || read -r RESTIC_PASSWORD; } && echo; done
 
-[ ! -d "$RESTIC_REPOSITORY" ] && { echo -n "The repository $RESTIC_REPOSITORY doesn't exist, create it? (Y/n) " && read -r REPLY && echo; { [ -z "$REPLY" ] || [ "$REPLY" = 'y' ] || [ "$REPLY" = 'Y' ]; } && { "$restic" init && sleep 2; } || { return 2>/dev/null || exit; } }
+[ ! -d "$RESTIC_REPOSITORY" ] && { echo -n "The repository $RESTIC_REPOSITORY doesn't exist, create it? (Y/n) " && read -r REPLY </dev/tty && echo; { [ -z "$REPLY" ] || [ "$REPLY" = 'y' ] || [ "$REPLY" = 'Y' ]; } && { "$restic" init && sleep 2; } || { return 2>/dev/null || exit; } }
 
 while ! "$restic" snapshots >/dev/null; do echo -n 'Enter repo password: ' && { read -r -s RESTIC_PASSWORD 2>/dev/null || read -r RESTIC_PASSWORD; } && echo; done
 
-#[ -n "$SOURCE_DOTENV" ] && return 2>/dev/null #if the script is sourced the cleanup should run at the end of the parent script not here
-
-#cleanup
-
 # Choose action to be performed
 while [ -z "$action" ]; do echo 'Select action to perform:'; action=`echo -e "restore\nbackup" | select_from_list -1`; done 
-{ [ "$action" = "restore" ] && restore "$@"; } \
-|| { [ "$action" = "backup" ] && backup "$@"; }
+if [ "$action" = "restore" ]; then
+	restore "$@"
+elif [ "$action" = "backup" ]; then
+	backup "$@"
+fi
 unset action
 
-{ return 2>/dev/null || exit; }
+return 2>/dev/null || exit
 __PAYLOAD_BEGINS__

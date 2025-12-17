@@ -2,4 +2,6 @@
 *
 !.gitignore
 !LICENSE
+!build.sh
+!README.md
 !restic.sh
