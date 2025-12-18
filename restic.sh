@@ -430,7 +430,7 @@ restore() {
 
 		[ ${#snapshots} -le 0 ] && echo 'No snapshots available for restore' && return 1
 
-		while [ -z "$id" ]; do echo 'Select snapshot to be restored:'; id=`echo -e "$snapshots" | select_from_list` && id=${id%% *}; done
+		while [ -z "$id" ]; do echo 'Select snapshot to be restored:'; id=`echo -en "$snapshots" | select_from_list` && id=${id%% *}; done
 	fi
 
 	local target="$1"; [ -n "$1" ] && shift
@@ -552,7 +552,7 @@ if [ -z "$RESTIC_REPOSITORY" ]; then
 	for dir in `find $([ "$pwd" = "$PWD" ] && echo "$pwd" || echo -e "$pwd\n$PWD") -maxdepth 1 -type d`; do
 		is_restic_repo "$dir" && repos="$dir\n$repos"
 	done
-	repos="Enter path manually\n$repos\n"
+	repos="Enter path manually\n$repos"
 	while [ -z "$RESTIC_REPOSITORY" ]; do echo 'Select repository:'; RESTIC_REPOSITORY=`echo -en "$repos" | select_from_list`; done
 	[ "$RESTIC_REPOSITORY" = 'Enter path manually' ] && RESTIC_REPOSITORY=
 	while [ -z "$RESTIC_REPOSITORY" ]; do echo -n "Enter repo path: " && read -r RESTIC_REPOSITORY </dev/tty && echo; done
