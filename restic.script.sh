@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 
 #set -e #it causes the calling shell to exit when in source mode
 
@@ -70,7 +70,7 @@ find_execable_dir() {
 	[ -n "$1" ] && local pwd="$1"
 
 	local bins_dir=
-	for dir in "$TMPDIR" /tmp /dev /data/local/tmp ${PATH//:/ } "$pwd" "$PWD"; do
+	for dir in "$TMPDIR" /tmp /dev /data/local/tmp `echo $PATH | sed 's/:/ /g'` "$pwd" "$PWD"; do
 		f="$dir/test"
 		[ -d "$dir" ] && touch "$f" 2>/dev/null && chmod +x "$f" && [ -x "$f" ] && rm -f "$f" && bins_dir="$dir" && break
 		rm -f "$f"
@@ -120,12 +120,12 @@ get_payload_line() {
 }
 
 extract_payload_from() {
-	local bins_dir="$(mktemp -p"$(find_execable_dir)" -d)"
+	local bins_dir="$(mktemp -p "$(find_execable_dir)" -d)"
 
 	local self="$0"
 	[ -n "$1" ] && self="$1"
 
-	local payload="$(mktemp -p"$bins_dir" -u)"
+	local payload="$(mktemp -p "$bins_dir" -u)"
 	local payload_line="$(get_payload_line "$self")"
 
 	tail -n+$((payload_line+1)) "$self" > "$payload"
@@ -208,7 +208,7 @@ generate_recovery_script() {
 		printf "\\n^^^^^^^^ \$(date) ^^^^^^^^\\n"
 		sh "$MODPATH/META-INF/com/google/android/update-binary" _ _ "$MODPATH/$(basename "$ZIPFILE")"
 		printf "\\n________ \$(date) ________\\n"
-		rm -rf "$MODPATH" "${MODPATH/modules_update/modules}"
+		rm -rf "$MODPATH" "$(echo "$MODPATH" | sed 's/modules_update/modules/')"
 		EOF2
 
 		daemonize -e "$logfile" -o "$logfile" $(which sh) "$MODPATH/daemon.sh" 2>/dev/null \
@@ -229,7 +229,7 @@ generate_recovery_script() {
 		}
 	else
 		sh "$MODPATH/META-INF/com/google/android/update-binary" _ _ "$ZIPFILE" 2>&1
-		rm -rf "$MODPATH" "${MODPATH/modules_update/modules}" 2>/dev/null
+		rm -rf "$MODPATH" "$(echo "$MODPATH" | sed 's/modules_update/modules/')" 2>/dev/null
 	fi
 	EOF
 	# When the delimiter is unquoted, the shell performs variable substitution and command substitution within the heredoc content. To prevent this, the delimiter can be enclosed in single quotes, which treats the content literally. An optional minus sign (<<-) can be used to ignore leading tab characters, allowing for indented code in scripts without altering the actual content. This is particularly useful for maintaining code readability in shell scripts.
@@ -279,7 +279,7 @@ generate_recovery_script() {
 	cleanup() { rm -rf "\$tmpdir"; }
 	trap 'cleanup' EXIT QUIT TERM
 
-	for d in "\$TMPDIR" /tmp /dev \${PATH//:/ } "\$PWD"; do [ -w "\$d" ] && export TMPDIR="\$d" && break; done
+	for d in "\$TMPDIR" /tmp /dev \`echo \$PATH | sed 's/:/ /g'\` "\$PWD"; do [ -w "\$d" ] && export TMPDIR="\$d" && break; done
 	tmpdir=\`mktemp -d\`
 
 	unzip -o -d "\$tmpdir" "\$ZIP" "$SELFNAME" >/dev/null
@@ -329,7 +329,7 @@ generate_recovery_backup_script() {
 	{ [ -z "$backup_path" ] || [ -z "$RESTIC_REPOSITORY" ]; } && return 1
 
 	local filedir="$RESTIC_REPOSITORY/.BACKUP"
-	local filename="backup-${backup_path//[\/ ]/_}.zip"
+	local filename="backup-$(echo "$backup_path" | sed 's/[\/ ]/_/g').zip"
 
 	mkdir "$filedir" 2>/dev/null || true
 
@@ -367,7 +367,9 @@ generate_recovery_restore_scripts() {
 	local line=
 	"$restic" snapshots | while IFS= read -r line; do
 		case "$line" in *[0-9]-[0-9]*) true ;; *) continue ;; esac
-		line="${line//  /__}"; line="${line//_ /__}"; line="$(echo "$line" | tr -s '_')"
+		line="$(echo "$line" | sed 's/  /__/g')"
+		line="$(echo "$line" | sed 's/_ /__/g')"
+		line="$(echo "$line" | tr -s '_')"
 		local id="${line%%_*}"; line="${line#*_}"
 		local time="${line%%_*}"; line="${line#*_}"
 		local host="${line%%_*}"; line="${line#*_}"
@@ -376,8 +378,8 @@ generate_recovery_restore_scripts() {
 		local size="${line%%_*}"
 		[ "$size" = "$paths" ] && paths="$tags" && tags=
 
-		local filename="restore-${time//[: ]/_}-${paths//\//_}.zip"
-		[ -n "$tags" ] && filename="$filename-${tags//[: ]/_}"
+		local filename="restore-$(echo "$time" | sed 's/[: ]/_/g')-$(echo "$paths" | sed 's/\//_/g').zip"
+		[ -n "$tags" ] && filename="$filename-$(echo "$tags" | sed 's/[: ]/_/g')"
 
 		commands=$(cat <<- EOF
 		echo "$RESTIC_PASSWORD" | sh "\$restic_sh" restic -r "\$RESTIC_REPOSITORY" snapshots "$id" | grep 'Time' >/dev/null && ID_EXISTS=true
