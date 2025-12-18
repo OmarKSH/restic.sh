@@ -559,7 +559,7 @@ if [ -z "$RESTIC_REPOSITORY" ]; then
 	unset repos
 fi
 
-[ -z "$RESTIC_PASSWORD" ] && echo -e "\033[38;5;3mYou should source this script at least once instead of running it so that you won't have to input the password everytime\e[0m"
+#[ -z "$RESTIC_PASSWORD" ] && echo -e "\033[38;5;3mYou should source this script at least once instead of running it so that you won't have to input the password everytime\e[0m"
 while [ -z "$RESTIC_PASSWORD" ]; do echo -n 'Enter repo password: ' && { read -r -s RESTIC_PASSWORD 2>/dev/null || read -r RESTIC_PASSWORD; } && echo; done
 
 [ ! -d "$RESTIC_REPOSITORY" ] && { echo -n "The repository $RESTIC_REPOSITORY doesn't exist, create it? (Y/n) " && read -r REPLY </dev/tty && echo; { [ -z "$REPLY" ] || [ "$REPLY" = 'y' ] || [ "$REPLY" = 'Y' ]; } && { "$restic" init && sleep 2; } || { return 2>/dev/null || exit; } }
