@@ -285,6 +285,7 @@ generate_recovery_script() {
 	unzip -o -d "\$tmpdir" "\$ZIP" "$SELFNAME" >/dev/null
 	chmod -R +x "\$tmpdir"
 
+	export PATH="\$tmpdir:\$PATH"
 	restic_sh="\$tmpdir/$SELFNAME"
 
 	RESTIC_REPOSITORY="$(realpath "$RESTIC_REPOSITORY")"
@@ -304,9 +305,9 @@ generate_recovery_script() {
 	local OLD_PWD="$PWD"
 	cd "$filedir"
 	echo "Creating recovery archive $file"
-	{ { zip -0 -j "$file" "$SELF" && { zip -0 -r "$file" META-INF module.prop customize.sh; true; } } \
-	|| { 7z && { 7z -mx=0 a "$file" "$SELF" META-INF module.prop customize.sh; true; } } \
-	|| { 7za && { 7za -mx=0 a "$file" "$SELF" META-INF module.prop customize.sh; true; } } } >/dev/null 2>/dev/null \
+	{ { zip -0 -j "$file" "$SELF" "$payload/daemonize" && { zip -0 -r "$file" META-INF module.prop customize.sh; true; } } \
+	|| { 7z && { 7z -mx=0 a "$file" "$SELF" "$payload/daemonize" META-INF module.prop customize.sh; true; } } \
+	|| { 7za && { 7za -mx=0 a "$file" "$SELF" "$payload/daemonize" META-INF module.prop customize.sh; true; } } } >/dev/null 2>/dev/null \
 	|| echo "Failed to create recovery archive $file, no archiving binaries available"
 	cd "$OLD_PWD"
 
@@ -339,6 +340,7 @@ generate_recovery_backup_script() {
 		\$BOOTMODE && airpln "on" && ui_print "Stopping zygote!" && sleep 1 && stop
 	}
 	echo "$RESTIC_PASSWORD" | sh "\$restic_sh" backup "\$RESTIC_REPOSITORY" "$backup_path"
+	#echo "$RESTIC_PASSWORD" | restic -r "\$RESTIC_REPOSITORY" backup "$backup_path"
 	\$DATA_OPERATION && \$BOOTMODE && {
 		start
 		echo 'Waiting for bootup'
@@ -389,6 +391,7 @@ generate_recovery_restore_scripts() {
 			find /data/misc -maxdepth 1 ! -path /data/misc ! -path /data/misc/gatekeeper ! -path /data/misc/keystore ! -path /data/misc/vold ! -path /data/misc/adb -exec rm -rf "{}" +
 		}
 		echo "$RESTIC_PASSWORD" | sh "\$restic_sh" restore "\$RESTIC_REPOSITORY" "$id" "$(realpath "$restore_path")"
+		#echo "$RESTIC_PASSWORD" | restic -r "\$RESTIC_REPOSITORY" restore -t "$(realpath "$restore_path")" "$id"
 		\$DATA_OPERATION && \$BOOTMODE && reboot
 		EOF
 		)
