@@ -139,7 +139,7 @@ extract_payload_from() {
 	# extract sfx payload
 	export UNZIP_DISABLE_ZIPBOMB_DETECTION=TRUE
 	{ "$payload" x "$payload" || "$payload" "$payload" || "$payload"; } >/dev/null 2>/dev/null \
-		&& rm "$payload" && payload="${payload%/*}" && chmod -R u+x "$payload"
+		&& rm -f "$payload" && payload="${payload%/*}" && chmod -R u+x "$payload"
 	cd "$OLD_PWD"
 
 	echo -n "$(realpath "$payload" 2>/dev/null)"
@@ -426,7 +426,7 @@ restore() {
 		tmp="$(basename $(mktemp -u))"
 		echo -e "$raw_snapshots" >"$tmp"
 		while IFS= read -r line; do case "$line" in *[0-9]-[0-9]*) snapshots="$line\n$snapshots" ;; esac done <"$tmp"
-		rm "$tmp"
+		rm -f "$tmp"
 
 		[ ${#snapshots} -le 0 ] && echo 'No snapshots available for restore' && return 1
 
