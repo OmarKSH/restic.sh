@@ -532,6 +532,8 @@ action="$1"
 
 [ -n "$action" -a -x "$payload/$action" ] && { shift; "$payload/$action" "$@"; unset action; return $? 2>/dev/null || exit $?; }
 
+[ ! -x "$restic" ] && echo "Restic binary \"$restic\" doesn't exist or is not executable" && { return 1 2>/dev/null || exit 1; }
+
 export RESTIC_PASSWORD
 # If the password is piped to the script then read it into a variable
 [ ! -t 0 ] && IFS= read -r RESTIC_PASSWORD
