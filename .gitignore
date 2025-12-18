@@ -4,5 +4,5 @@
 !LICENSE
 !build.sh
 !README.md
-!restic.sh
+!restic.script.sh
 !Makefile

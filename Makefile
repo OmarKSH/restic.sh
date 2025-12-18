@@ -1,4 +1,4 @@
-bin/restic.sh: restic.sh build.sh
+restic.sh: restic.script.sh build.sh bin/*
 	@sh build.sh $(ARCHIVER)
 clean:
-	@rm -f bin/restic.sh
+	@rm -f restic.sh
