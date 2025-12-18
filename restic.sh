@@ -139,7 +139,8 @@ extract_payload_from() {
 	# extract sfx payload
 	export UNZIP_DISABLE_ZIPBOMB_DETECTION=TRUE
 	{ "$payload" x "$payload" || "$payload" "$payload" || "$payload"; } >/dev/null 2>/dev/null \
-		&& rm -f "$payload" && payload="${payload%/*}" && chmod -R u+x "$payload"
+		&& rm -f "$payload" && payload="${payload%/*}" && chmod -R u+x "$payload" \
+		|| { rm -rf "$bins_dir" && payload=; }
 	cd "$OLD_PWD"
 
 	echo -n "$(realpath "$payload" 2>/dev/null)"
