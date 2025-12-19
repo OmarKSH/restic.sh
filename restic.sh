@@ -70,7 +70,7 @@ find_execable_dir() {
 	[ -n "$1" ] && local pwd="$1"
 
 	local bins_dir=
-	for dir in "$TMPDIR" /tmp /dev /data/local/tmp "$pwd" "$PWD" ${PATH//:/ }; do
+	for dir in "$TMPDIR" /tmp /dev /data/local/tmp ${PATH//:/ } "$pwd" "$PWD"; do
 		f="$dir/test"
 		[ -d "$dir" ] && touch "$f" 2>/dev/null && chmod +x "$f" && [ -x "$f" ] && rm -f "$f" && bins_dir="$dir" && break
 		rm -f "$f"
@@ -278,7 +278,7 @@ generate_recovery_script() {
 	cleanup() { rm -rf "\$tmpdir"; }
 	trap 'cleanup' EXIT QUIT TERM
 
-	for d in "\$TMPDIR" /tmp /dev "\$PWD"; do [ -w "\$d" ] && export TMPDIR="\$d" && break; done
+	for d in "\$TMPDIR" /tmp /dev \${PATH//:/ } "\$PWD"; do [ -w "\$d" ] && export TMPDIR="\$d" && break; done
 	tmpdir=\`mktemp -d\`
 
 	unzip -o -d "\$tmpdir" "\$ZIP" "$SELFNAME" >/dev/null
