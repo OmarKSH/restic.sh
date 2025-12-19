@@ -429,10 +429,9 @@ restore() {
 		[ -z "$raw_snapshots" ] && echo 'No snapshots in the repo!' && { return 1 2>/dev/null || exit 1; }
 
 		local snapshots=
-		tmp="$(basename $(mktemp -u))"
-		printf "$raw_snapshots" >"$tmp"
-		while IFS= read -r line; do case "$line" in *[0-9]-[0-9]*) snapshots="$line\n$snapshots" ;; esac done <"$tmp"
-		rm -f "$tmp"
+		while IFS= read -r line; do case "$line" in *[0-9]-[0-9]*) snapshots="$line\n$snapshots" ;; esac done <<- EOF
+		$raw_snapshots
+		EOF
 
 		[ ${#snapshots} -le 0 ] && echo 'No snapshots available for restore' && return 1
 
