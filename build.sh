@@ -31,15 +31,22 @@ done
 
 payload_extractor_name="${payload_extractor##*/}"
 if [ "$payload_extractor_name" != "${payload_extractor_name#*tiny7zx}" ]; then
-	7za a -t7z -m0=lzma -mx=0 -ms=50m -ms=on bin/payload "$inpayload_archiver" $binaries 2>/dev/null \
+	bin/7za a -t7z -m0=lzma -mx=0 -ms=50m -ms=on bin/payload "$inpayload_archiver" $binaries 2>/dev/null \
+		|| bin/7z a -t7z -m0=lzma -mx=0 -ms=50m -ms=on bin/payload "$inpayload_archiver" $binaries 2>/dev/null \
+		|| 7za a -t7z -m0=lzma -mx=0 -ms=50m -ms=on bin/payload "$inpayload_archiver" $binaries 2>/dev/null \
 		|| 7z a -t7z -m0=lzma -mx=0 -ms=50m -ms=on bin/payload "$inpayload_archiver" $binaries 2>/dev/null \
 		|| { echo "No available 7z archivers" && exit 1; }
 elif [ "$payload_extractor_name" != "${payload_extractor_name#*7z*}" ]; then
-	7za a -t7z -mx=7 bin/payload "$inpayload_archiver" $binaries 2>/dev/null \
+	bin/7za a -t7z -mx=7 bin/payload "$inpayload_archiver" $binaries 2>/dev/null \
+		|| bin/7z a -t7z -mx=7 bin/payload "$inpayload_archiver" $binaries 2>/dev/null \
+		|| 7za a -t7z -mx=7 bin/payload "$inpayload_archiver" $binaries 2>/dev/null \
 		|| 7z a -t7z -mx=7 bin/payload "$inpayload_archiver" $binaries 2>/dev/null \
 		|| { echo "No available 7z archivers" && exit 1; }
 elif [ "$payload_extractor_name" != "${payload_extractor_name#*zip*}" ]; then
-	zip -7 -j bin/payload "$inpayload_archiver" $binaries 2>/dev/null \
+	bin/zip -7 -j bin/payload "$inpayload_archiver" $binaries 2>/dev/null \
+		|| bin/7za a -tzip -mx=7 bin/payload "$inpayload_archiver" $binaries 2>/dev/null \
+		|| bin/7z a -tzip -mx=7 bin/payload "$inpayload_archiver" $binaries 2>/dev/null \
+		|| zip -7 -j bin/payload "$inpayload_archiver" $binaries 2>/dev/null \
 		|| 7za a -tzip -mx=7 bin/payload "$inpayload_archiver" $binaries 2>/dev/null \
 		|| 7z a -tzip -mx=7 bin/payload "$inpayload_archiver" $binaries 2>/dev/null \
 		|| { echo "No available zip archivers" && exit 1; }
