@@ -205,9 +205,9 @@ generate_recovery_script() {
 		EOF2
 
 		cat <<- EOF2 > "$MODPATH/daemon.sh"
-		echo -e "\\n^^^^^^^^ \$(date) ^^^^^^^^\\n"
+		printf "\\n^^^^^^^^ \$(date) ^^^^^^^^\\n"
 		sh "$MODPATH/META-INF/com/google/android/update-binary" _ _ "$MODPATH/$(basename "$ZIPFILE")"
-		echo -e "\\n________ \$(date) ________\\n"
+		printf "\\n________ \$(date) ________\\n"
 		rm -rf "$MODPATH" "${MODPATH/modules_update/modules}"
 		EOF2
 
@@ -219,9 +219,9 @@ generate_recovery_script() {
 			cat <<- 'EOF2' > "$MODPATH/service.sh"
 			MODDIR="${0%/*}"
 			while read -r line; do [ "$line" != "${line#id=}" ] && logfile="/data/media/0/${line#id=}".log && break; done < "$MODDIR/module.prop"
-			echo -e "\n^^^^^^^^ $(date) ^^^^^^^^\n" >"$logfile"
+			printf "\n^^^^^^^^ $(date) ^^^^^^^^\n" >"$logfile"
 			sh "$MODDIR/META-INF/com/google/android/update-binary" _ _ "$(find "$MODDIR" -maxdepth 1 -type f -name '*.zip')" 2>&1 | tee -a "$logfile"
-			echo -e "\n________ $(date) ________\n" >>"$logfile"
+			printf "\n________ $(date) ________\n" >>"$logfile"
 			rm -rf "$MODDIR"
 			EOF2
 
@@ -247,9 +247,9 @@ generate_recovery_script() {
 	[ -z \$BOOTMODE ] && BOOTMODE=false
 
 	ui_print() {
-		\$BOOTMODE && { echo -e \$@; return \$?; }
-		while IFS= read -r line 2>/dev/null; do echo -e "ui_print \$line\\nui_print" >/proc/self/fd/\$OUTFD; done
-		[ \$# -gt 0 ] && echo -e "ui_print \$@\\nui_print" >/proc/self/fd/\$OUTFD
+		\$BOOTMODE && { printf "\$@\n"; return \$?; }
+		while IFS= read -r line 2>/dev/null; do printf "ui_print \$line\\nui_print\n" >/proc/self/fd/\$OUTFD; done
+		[ \$# -gt 0 ] && printf "ui_print \$@\\nui_print\n" >/proc/self/fd/\$OUTFD
 		return 0 #This line is important as incase the previous check failed it won't cause the while function to return an error code
 	}
 
@@ -403,7 +403,7 @@ generate_recovery_restore_scripts() {
 backup() {
 	local backup_path="$1"; [ -n "$1" ] && shift
 	local backup_paths="Enter paths manually\n/data -e /data/media\n/data/media"
-	while [ -z "$backup_path" ]; do echo 'Select backup string:' && backup_path="$(echo -e "$backup_paths" | select_from_list)"; done
+	while [ -z "$backup_path" ]; do echo 'Select backup string:' && backup_path="$(printf "$backup_paths\n" | select_from_list)"; done
 	[ "$backup_path" = 'Enter paths manually' ] && echo -n "Enter backup string: " && read -r backup_path </dev/tty && echo
 
 	generate_recovery_backup_script "$backup_path"
@@ -428,13 +428,13 @@ restore() {
 
 		local snapshots=
 		tmp="$(basename $(mktemp -u))"
-		echo -e "$raw_snapshots" >"$tmp"
+		printf "$raw_snapshots" >"$tmp"
 		while IFS= read -r line; do case "$line" in *[0-9]-[0-9]*) snapshots="$line\n$snapshots" ;; esac done <"$tmp"
 		rm -f "$tmp"
 
 		[ ${#snapshots} -le 0 ] && echo 'No snapshots available for restore' && return 1
 
-		while [ -z "$id" ]; do echo 'Select snapshot to be restored:'; id=`echo -en "$snapshots" | select_from_list` && id=${id%% *}; done
+		while [ -z "$id" ]; do echo 'Select snapshot to be restored:'; id=`printf "$snapshots" | select_from_list` && id=${id%% *}; done
 	fi
 
 	local target="$1"; [ -n "$1" ] && shift
@@ -497,7 +497,7 @@ run_schedule() {
 		[ -z "$RESTIC_REPOSITORY_input" ] && [ -r "$RESTIC_REPOSITORY_file" ] && { read -r RESTIC_REPOSITORY <"$RESTIC_REPOSITORY_file" || true; }
 		[ -z "$RESTIC_PASSWORD_input" ] && [ -r "$RESTIC_PASSWORD_file" ] && { read -r RESTIC_PASSWORD <"$RESTIC_PASSWORD_file" || true; }
 
-		echo -e "\rPerform backup at $(date -d"@$trigger_date"), current time: $(date)"
+		printf "\rPerform backup at $(date -d"@$trigger_date"), current time: $(date)\n"
 
 		[ $(date +%s) -ge $(date +%s -d"@$trigger_date") ] && nightly "$@" && calculate_trigger_date
 
@@ -555,17 +555,17 @@ export RESTIC_REPOSITORY=$1; [ -n "$1" ] && shift
 
 # Find the repos in the current directory and the directory where the script exists
 if [ -z "$RESTIC_REPOSITORY" ]; then
-	for dir in `find $([ "$pwd" = "$PWD" ] && echo "$pwd" || echo -e "$pwd\n$PWD") -maxdepth 1 -type d`; do
+	for dir in `find $([ "$pwd" = "$PWD" ] && echo "$pwd" || printf "$pwd\n$PWD\n") -maxdepth 1 -type d`; do
 		is_restic_repo "$dir" && repos="$dir\n$repos"
 	done
 	repos="Enter path manually\n$repos"
-	while [ -z "$RESTIC_REPOSITORY" ]; do echo 'Select repository:'; RESTIC_REPOSITORY=`echo -en "$repos" | select_from_list`; done
+	while [ -z "$RESTIC_REPOSITORY" ]; do echo 'Select repository:'; RESTIC_REPOSITORY=`printf "$repos" | select_from_list`; done
 	[ "$RESTIC_REPOSITORY" = 'Enter path manually' ] && RESTIC_REPOSITORY=
 	while [ -z "$RESTIC_REPOSITORY" ]; do echo -n "Enter repo path: " && read -r RESTIC_REPOSITORY </dev/tty && echo; done
 	unset repos
 fi
 
-#[ -z "$RESTIC_PASSWORD" ] && echo -e "\033[38;5;3mYou should source this script at least once instead of running it so that you won't have to input the password everytime\e[0m"
+#[ -z "$RESTIC_PASSWORD" ] && printf "\033[38;5;3mYou should source this script at least once instead of running it so that you won't have to input the password everytime\e[0m\n"
 while [ -z "$RESTIC_PASSWORD" ]; do echo -n 'Enter repo password: ' && { read -r -s RESTIC_PASSWORD 2>/dev/null || read -r RESTIC_PASSWORD; } && echo; done
 
 [ ! -d "$RESTIC_REPOSITORY" ] && { echo -n "The repository $RESTIC_REPOSITORY doesn't exist, create it? (Y/n) " && read -r REPLY </dev/tty && echo; { [ -z "$REPLY" ] || [ "$REPLY" = 'y' ] || [ "$REPLY" = 'Y' ]; } && { "$restic" init && sleep 2; } || { return 2>/dev/null || exit; } }
@@ -573,7 +573,7 @@ while [ -z "$RESTIC_PASSWORD" ]; do echo -n 'Enter repo password: ' && { read -r
 while ! "$restic" snapshots >/dev/null; do echo -n 'Enter repo password: ' && { read -r -s RESTIC_PASSWORD 2>/dev/null || read -r RESTIC_PASSWORD; } && echo; done
 
 # Choose action to be performed
-while [ -z "$action" ]; do echo 'Select action to perform:'; action=`echo -e "restore\nbackup" | select_from_list -1`; done 
+while [ -z "$action" ]; do echo 'Select action to perform:'; action=`printf "restore\nbackup\n" | select_from_list -1`; done 
 if [ "$action" = "restore" ]; then
 	restore "$@"
 elif [ "$action" = "backup" ]; then
