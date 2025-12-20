@@ -9,7 +9,8 @@ cd "${0%/*}" 2>/dev/null || true
 
 mkdir bin 2>/dev/null || true
 
-payload_extractor="$(find -L bin -type f -name "*$1*" -print0 -quit)"
+[ ! -f "$payload_extractor" ] && [ ${#1} -gt 0 ] && payload_extractor="$(find -L bin -maxdepth 1 -type f -name "$1" -print0 -quit)"
+[ ! -f "$payload_extractor" ] && [ ${#1} -gt 0 ] && payload_extractor="$(find -L bin -maxdepth 1 -type f -name "*$1*" -print0 -quit)"
 [ ! -f "$payload_extractor" ] && payload_extractor=bin/unzipsfx
 [ ! -f "$payload_extractor" ] && payload_extractor=bin/unzip
 [ ! -f "$payload_extractor" ] && payload_extractor=bin/tiny7zx
