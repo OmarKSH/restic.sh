@@ -34,11 +34,14 @@ SELF="$pwd/$SELFNAME"
 #[ `basename $0` = "$SELFNAME" ] && [ -z "$SOURCE_DOTENV" ] && echo 'This script should not be run directly!' && { return 1 2>/dev/null || exit 1; }
 
 select_from_list() {
-	{ [ "$1" != 'text' ] && [ -x "`command -v fzf`" ] && { fzf "$@" <&0; return $?; }; } \
-	|| { local line i=0 REPLY \
-	&& while IFS= read -r line; do [ -z "$line" ] && continue; echo "$i) $line" >/dev/tty; eval "local line$i=\"$line\""; i=$((i+1)); done \
-	&& echo -n "Enter choice number: " >/dev/tty && read -r REPLY </dev/tty \
-	&& eval "echo -n \"\${line$REPLY}\"" && echo >/dev/tty; }
+	[ "$FZF" != '0' ] && [ -x "`command -v fzf`" ] && { fzf "$@" <&0; return $?; } \
+	|| { local line i=0 REPLY
+	{ [ ! -t 0 ] && while IFS= read -r line; do [ -z "$line" ] && continue; echo "$i) $line" >/dev/tty; eval "local line$i=\"$line\""; i=$((i+1)); done; true; }
+	# { while IFS= read -r line; do [ -z "$line" ] && continue; echo "$i) $line" >/dev/tty; eval "local line$i=\"$line\""; i=$((i+1)); done <<- EOF
+	# `for i in "$@"; do echo "$i"; done`
+	# EOF
+	# }
+	echo -n "Enter choice number: " >/dev/tty && read -r REPLY </dev/tty && eval "echo -n \"\${line$REPLY}\"" && echo >/dev/tty; }
 }
 
 remount_exec() {
