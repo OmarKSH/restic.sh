@@ -27,18 +27,18 @@ SELFNAME=restic.sh
 
 pwd="$PWD"
 [ "${0##*/}" = "$SELFNAME" ] && pwd=$(dirname "$(realpath "$0")")
-[ -n "$BASH_SOURCE" ] && pwd=`dirname "$(realpath "$BASH_SOURCE")"`
+[ -n "$BASH_SOURCE" ] && pwd=$(dirname "$(realpath "$BASH_SOURCE")")
 SELF="$pwd/$SELFNAME"
 
 [ ! -f "$SELF" ] && echo "Sanity check failed! probably an error with the current directory detection in $SELFNAME script" && { return 1 2>/dev/null || exit 1; }
-#[ `basename $0` = "$SELFNAME" ] && [ -z "$SOURCE_DOTENV" ] && echo 'This script should not be run directly!' && { return 1 2>/dev/null || exit 1; }
+#[ $(basename $0) = "$SELFNAME" ] && [ -z "$SOURCE_DOTENV" ] && echo 'This script should not be run directly!' && { return 1 2>/dev/null || exit 1; }
 
 select_from_list() {
-	[ "$FZF" != '0' ] && [ -x "`command -v fzf`" ] && { fzf "$@" <&0; return $?; } \
+	[ "$FZF" != '0' ] && [ -x "$(command -v fzf)" ] && { fzf "$@" <&0; return $?; } \
 	|| { local line i=0 REPLY
 	{ [ ! -t 0 ] && while IFS= read -r line; do [ -z "$line" ] && continue; echo "$i) $line" >/dev/tty; eval "local line$i=\"$line\""; i=$((i+1)); done; true; }
 	# { while IFS= read -r line; do [ -z "$line" ] && continue; echo "$i) $line" >/dev/tty; eval "local line$i=\"$line\""; i=$((i+1)); done <<- EOF
-	# `for i in "$@"; do echo "$i"; done`
+	# $(for i in "$@"; do echo "$i"; done)
 	# EOF
 	# }
 	echo -n "Enter choice number: " >/dev/tty && read -r REPLY </dev/tty && eval "echo -n \"\${line$REPLY}\"" && echo >/dev/tty; }
@@ -73,7 +73,7 @@ find_execable_dir() {
 	[ -n "$1" ] && local pwd="$1"
 
 	local bins_dir=
-	for dir in "$TMPDIR" /tmp /dev /data/local/tmp `echo $PATH | sed 's/:/ /g'` "$pwd" "$PWD"; do
+	for dir in "$TMPDIR" /tmp /dev /data/local/tmp $(echo $PATH | sed 's/:/ /g') "$pwd" "$PWD"; do
 		f="$dir/test"
 		[ -d "$dir" ] && touch "$f" 2>/dev/null && chmod +x "$f" && [ -x "$f" ] && rm -f "$f" && bins_dir="$dir" && break
 		rm -f "$f"
@@ -92,7 +92,7 @@ load_bins_from() {
 	for bin in $bins; do type $bin >/dev/null 2>/dev/null || missing_bins="$bin $missing_bins"; done
 	[ -z "$missing_bins" ] && return
 
-	local bins_dir=`find_execable_dir`
+	local bins_dir=$(find_execable_dir)
 	[ -z "$bins_dir" ] && return 1
 	bins_dir="$bins_dir/__restic__bins__"
 	rm -rf "$bins_dir"
@@ -159,7 +159,7 @@ split_from() {
 	tail -n+$((payload_line+1)) "$self" > "$PWD/${selfname}.payload"
 
 	head -n$payload_line "$self" > "$PWD/$selfname"_
-	chmod `stat -c '%a' "$self"` "$PWD/${selfname}"_ "$PWD/${selfname}.payload"
+	chmod $(stat -c '%a' "$self") "$PWD/${selfname}"_ "$PWD/${selfname}.payload"
 	mv "$PWD/${selfname}"_ "$PWD/${selfname}"
 }
 
@@ -170,7 +170,7 @@ merge() {
 	selfname="${self##*/}"
 
 	[ -r "$PWD/${selfname}.payload" ] \
-		&& cat "$self" "$PWD/${selfname}.payload" > "$self"_  && { chmod `stat -c '%a' "$self"` "$self"_; mv "$self"_ "$self"; rm "$PWD/${selfname}.payload" || true; } \
+		&& cat "$self" "$PWD/${selfname}.payload" > "$self"_  && { chmod $(stat -c '%a' "$self") "$self"_; mv "$self"_ "$self"; rm "$PWD/${selfname}.payload" || true; } \
 		|| echo "Cannot merge, payload \"$PWD/${selfname}.payload\" doesn't exist"
 }
 
@@ -263,10 +263,10 @@ generate_recovery_script() {
 		"on")  { 
 			settings put global airplane_mode_on 1 || true
 			am broadcast -a android.intent.action.AIRPLANE_MODE --ez state true >/dev/null || true
-			#User_br=\`settings get system screen_brightness\` && settings put system screen_brightness \$((\$User_br / 3)) || true
-			#User_to=\`settings get system screen_off_timeout\` && settings put system screen_off_timeout 3600000 || true
-			#User_br_mode=\`settings get system screen_brightness_mode\` && settings put system screen_brightness_mode 0 || true
-			#User_plug=\`settings get global stay_on_while_plugged_in\` && settings put global stay_on_while_plugged_in 7 || true
+			#User_br=\$(settings get system screen_brightness\) && settings put system screen_brightness \$((\$User_br / 3)) || true
+			#User_to=\$(settings get system screen_off_timeout\) && settings put system screen_off_timeout 3600000 || true
+			#User_br_mode=\$(settings get system screen_brightness_mode\) && settings put system screen_brightness_mode 0 || true
+			#User_plug=\$(settings get global stay_on_while_plugged_in\) && settings put global stay_on_while_plugged_in 7 || true
 		} ;;
 		"off") {
 			settings put global airplane_mode_on 0 || true
@@ -282,8 +282,8 @@ generate_recovery_script() {
 	cleanup() { rm -rf "\$tmpdir"; }
 	trap 'cleanup' EXIT QUIT TERM
 
-	for d in "\$TMPDIR" /tmp /dev \`echo \$PATH | sed 's/:/ /g'\` "\$PWD"; do [ -w "\$d" ] && export TMPDIR="\$d" && break; done
-	tmpdir=\`mktemp -d\`
+	for d in "\$TMPDIR" /tmp /dev \$(echo \$PATH | sed 's/:/ /g') "\$PWD"; do [ -w "\$d" ] && export TMPDIR="\$d" && break; done
+	tmpdir=\$(mktemp -d)
 
 	unzip -o -d "\$tmpdir" "\$ZIP" "$SELFNAME" >/dev/null
 	chmod -R +x "\$tmpdir"
@@ -337,7 +337,7 @@ generate_recovery_backup_script() {
 	mkdir "$filedir" 2>/dev/null || true
 
 	commands=$(cat <<- EOF
-	DATA_OPERATION=`echo $backup_path | grep -q -E '(/| /)data( |/ |/$|$)' && echo true || echo false`
+	DATA_OPERATION=$(echo $backup_path | grep -q -E '(/| /)data( |/ |/$|$)' && echo true || echo false)
 	\$DATA_OPERATION && {
 		mount /data 2>/dev/null
 		\$BOOTMODE && airpln "on" && ui_print "Stopping zygote!" && sleep 1 && stop
@@ -347,7 +347,7 @@ generate_recovery_backup_script() {
 	\$DATA_OPERATION && \$BOOTMODE && {
 		start
 		echo 'Waiting for bootup'
-		while ! pgrep zygote >/dev/null || [ \`getprop service.bootanim.exit\` -eq 0 ]; do sleep 1; done
+		while ! pgrep zygote >/dev/null || [ \$(getprop service.bootanim.exit) -eq 0 ]; do sleep 1; done
 		airpln "off"
 	}
 	EOF
@@ -387,7 +387,7 @@ generate_recovery_restore_scripts() {
 		commands=$(cat <<- EOF
 		echo "$RESTIC_PASSWORD" | sh "\$restic_sh" restic -r "\$RESTIC_REPOSITORY" snapshots "$id" | grep 'Time' >/dev/null && ID_EXISTS=true
 		[ -z "\$ID_EXISTS" ] && echo "Snapshot $id doesn't exist!" && exit 1
-		DATA_OPERATION=`echo $paths | grep -q -E '(/| /)data( |/ |/$|$)' && echo true || echo false`
+		DATA_OPERATION=$(echo $paths | grep -q -E '(/| /)data( |/ |/$|$)' && echo true || echo false)
 		\$DATA_OPERATION && {
 			mount /data 2>/dev/null
 			ui_print "Wiping /data without wiping /data/media"
@@ -428,7 +428,7 @@ restore() {
 	if [ -z "$id" ]; then
 		echo 'Loading snapshots list...'
 
-		local raw_snapshots=`"$restic" snapshots`
+		local raw_snapshots="$("$restic" snapshots)"
 		[ -z "$raw_snapshots" ] && echo 'No snapshots in the repo!' && { return 1 2>/dev/null || exit 1; }
 
 		local snapshots=
@@ -438,7 +438,7 @@ restore() {
 
 		[ ${#snapshots} -le 0 ] && echo 'No snapshots available for restore' && return 1
 
-		while [ -z "$id" ]; do echo 'Select snapshot to be restored:'; id=`printf "$snapshots" | select_from_list` && id=${id%% *}; done
+		while [ -z "$id" ]; do echo 'Select snapshot to be restored:'; id="$(printf "$snapshots" | select_from_list)" && id=${id%% *}; done
 	fi
 
 	local target="$1"; [ -n "$1" ] && shift
@@ -559,11 +559,11 @@ export RESTIC_REPOSITORY=$1; [ -n "$1" ] && shift
 
 # Find the repos in the current directory and the directory where the script exists
 if [ -z "$RESTIC_REPOSITORY" ]; then
-	for dir in `find $([ "$pwd" = "$PWD" ] && echo "$pwd" || printf "$pwd\n$PWD\n") -maxdepth 1 -type d`; do
+	for dir in $(find $([ "$pwd" = "$PWD" ] && echo "$pwd" || printf "$pwd\n$PWD\n") -maxdepth 1 -type d); do
 		is_restic_repo "$dir" && repos="$dir\n$repos"
 	done
 	repos="Enter path manually\n$repos"
-	while [ -z "$RESTIC_REPOSITORY" ]; do echo 'Select repository:'; RESTIC_REPOSITORY=`printf "$repos" | select_from_list`; done
+	while [ -z "$RESTIC_REPOSITORY" ]; do echo 'Select repository:'; RESTIC_REPOSITORY=$(printf "$repos" | select_from_list); done
 	[ "$RESTIC_REPOSITORY" = 'Enter path manually' ] && RESTIC_REPOSITORY=
 	while [ -z "$RESTIC_REPOSITORY" ]; do echo -n "Enter repo path: " && read -r RESTIC_REPOSITORY </dev/tty && echo; done
 	unset repos
@@ -577,7 +577,7 @@ while [ -z "$RESTIC_PASSWORD" ]; do echo -n 'Enter repo password: ' && { read -r
 while ! "$restic" snapshots >/dev/null; do echo -n 'Enter repo password: ' && { read -r -s RESTIC_PASSWORD 2>/dev/null || read -r RESTIC_PASSWORD; } && echo; done
 
 # Choose action to be performed
-while [ -z "$action" ]; do echo 'Select action to perform:'; action=`printf "restore\nbackup\n" | select_from_list -1`; done 
+while [ -z "$action" ]; do echo 'Select action to perform:'; action=$(printf "restore\nbackup\n" | select_from_list -1); done 
 if [ "$action" = "restore" ]; then
 	restore "$@"
 elif [ "$action" = "backup" ]; then
