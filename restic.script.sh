@@ -293,7 +293,7 @@ generate_recovery_script() {
 
 	RESTIC_REPOSITORY="$(realpath "$RESTIC_REPOSITORY")"
 	[ ! -d "\$RESTIC_REPOSITORY" ] && ui_print "Searching for the repository...." \\
-	&& { RESTIC_REPOSITORY="\$(realpath "\$(dirname "\$(find "\$(dirname "\$ZIP")" / -type f -name "$filename" -print0 -quit)")/..")" \\
+	&& { RESTIC_REPOSITORY="\$(realpath "\$(dirname "\$(find "\$(dirname "\$ZIP")" / -type f -name "$filename" -print0 | head -n 1)")/..")" \\
 		&& ui_print "Found at \$RESTIC_REPOSITORY" || { ui_print "Couldn't find the repository!" && exit 1; } }
 
 	$commands
