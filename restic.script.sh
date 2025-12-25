@@ -195,7 +195,8 @@ generate_recovery_script() {
 	export PATH="$PATH:$MODPATH"
 	id="$(basename "$MODPATH")"
 
-	unzip -o -d "$MODPATH" "$ZIPFILE" || echo "Failed to extract required files"
+	export UNZIP_DISABLE_ZIPBOMB_DETECTION=TRUE
+	unzip -o -d "$MODPATH" "$ZIPFILE" || { echo "Failed to extract required files" && exit 1; }
 	chmod -R +x "$MODPATH"
 
 	if [ ${#ANDROID_SOCKET_zygote} -gt 0 ]; then #If executing from GUI
@@ -283,10 +284,11 @@ generate_recovery_script() {
 	trap 'cleanup' EXIT QUIT TERM
 
 	for d in "\$TMPDIR" /tmp /dev \$(echo \$PATH | sed 's/:/ /g') "\$PWD"; do [ -w "\$d" ] && export TMPDIR="\$d" && break; done
-	tmpdir=\$(mktemp -d)
+	tmpdir=\$(mktemp -d || exit 1)
 
-	unzip -o -d "\$tmpdir" "\$ZIP" "$SELFNAME" >/dev/null
-	chmod -R +x "\$tmpdir"
+	unzip -o -d "\$tmpdir" "\$ZIP" "$SELFNAME" >/dev/null \
+	&& chmod -R +x "\$tmpdir" \
+	|| exit 1
 
 	export PATH="\$tmpdir:\$PATH"
 	restic_sh="\$tmpdir/$SELFNAME"
