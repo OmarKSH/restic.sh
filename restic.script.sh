@@ -34,6 +34,7 @@ SELF="$pwd/$SELFNAME"
 #[ $(basename $0) = "$SELFNAME" ] && [ -z "$SOURCE_DOTENV" ] && echo 'This script should not be run directly!' && { return 1 2>/dev/null || exit 1; }
 
 select_from_list() {
+	echo -n >/dev/tty || return 1
 	[ "$FZF" != '0' ] && [ -x "$(command -v fzf)" ] && { fzf "$@" <&0; return $?; } \
 	|| { local line i=0 REPLY
 	{ [ ! -t 0 ] && while IFS= read -r line; do [ -z "$line" ] && continue; echo "$i) $line" >&2; eval "local line$i=\"$line\""; i=$((i+1)); done; true; }
@@ -410,8 +411,10 @@ generate_recovery_restore_scripts() {
 backup() {
 	local backup_path="$1"; [ -n "$1" ] && shift
 	local backup_paths="Enter paths manually\n/data -e /data/media\n/data/media"
-	while [ -z "$backup_path" ]; do echo 'Select backup string:' && backup_path="$(printf "$backup_paths\n" | select_from_list)"; done
-	[ "$backup_path" = 'Enter paths manually' ] && echo -n "Enter backup string: " && read -r backup_path </dev/tty && echo
+
+	while [ -z "$backup_path" ] && echo -n >/dev/tty; do echo 'Select backup string:' && backup_path="$(printf "$backup_paths\n" | select_from_list)"; done
+	[ "$backup_path" = 'Enter paths manually' ] && echo -n "Enter backup string: " && echo -n >/dev/tty && read -r backup_path </dev/tty && echo
+	[ -z "$backup_path" ] && return 1
 
 	generate_recovery_backup_script "$backup_path"
 
@@ -428,6 +431,8 @@ backup() {
 restore() {
 	local id="$1"; [ -n "$1" ] && shift
 	if [ -z "$id" ]; then
+		echo -n >/dev/tty || return 1
+
 		echo 'Loading snapshots list...'
 
 		local raw_snapshots="$("$restic" snapshots)"
@@ -445,6 +450,7 @@ restore() {
 
 	local target="$1"; [ -n "$1" ] && shift
 	if [ -z "$target" ]; then
+		echo -n >/dev/tty || return 1
 		echo -n 'Enter restore target (default /): ' && read -r target </dev/tty && echo
 		[ -z "$target" ] && target='/'
 	fi
@@ -452,6 +458,7 @@ restore() {
 	local excludes="-e '$RESTIC_REPOSITORY' -e /data/system/gatekeeper.password.key -e /data/system/gatekeeper.pattern.key -e /data/system/locksettings.db -e /data/system/locksettings.db-shm -e /data/system/locksettings.db-wal"
 
 	#echo -n 'Delete fingerprint data (y/N)? ' \
+	# && echo -n >/dev/tty \
 	#	&& read -r REPLY </dev/tty && { [ "$REPLY" = 'y' ] || [ "$REPLY" = 'Y' ]; } \
 	#	&& excludes="$excludes -e /data/system/users/0/fpdata -e /data/system/users/0/settings_fingerprint.xml" \
 	#	&& echo
@@ -561,6 +568,7 @@ export RESTIC_REPOSITORY=$1; [ -n "$1" ] && shift
 
 # Find the repos in the current directory and the directory where the script exists
 if [ -z "$RESTIC_REPOSITORY" ]; then
+	echo -n >/dev/tty || { return 1 2>/dev/null || exit 1; }
 	for dir in $(find $([ "$pwd" = "$PWD" ] && echo "$pwd" || printf "$pwd\n$PWD\n") -maxdepth 1 -type d); do
 		is_restic_repo "$dir" && repos="$dir\n$repos"
 	done
@@ -574,12 +582,12 @@ fi
 #[ -z "$RESTIC_PASSWORD" ] && printf "\033[38;5;3mYou should source this script at least once instead of running it so that you won't have to input the password everytime\e[0m\n"
 while [ -z "$RESTIC_PASSWORD" ]; do echo -n 'Enter repo password: ' && { read -r -s RESTIC_PASSWORD 2>/dev/null || read -r RESTIC_PASSWORD; } && echo; done
 
-[ ! -d "$RESTIC_REPOSITORY" ] && { echo -n "The repository $RESTIC_REPOSITORY doesn't exist, create it? (Y/n) " && read -r REPLY </dev/tty && echo; { [ -z "$REPLY" ] || [ "$REPLY" = 'y' ] || [ "$REPLY" = 'Y' ]; } && { "$restic" init && sleep 2; } || { return 2>/dev/null || exit; } }
+[ ! -d "$RESTIC_REPOSITORY" ] && { echo -n "The repository $RESTIC_REPOSITORY doesn't exist, create it? (Y/n) "; echo -n >/dev/tty && read -r REPLY </dev/tty && echo; { [ -z "$REPLY" ] || [ "$REPLY" = 'y' ] || [ "$REPLY" = 'Y' ]; } && { "$restic" init && sleep 2; } || { return 2>/dev/null || exit; } }
 
 while ! "$restic" snapshots >/dev/null; do echo -n 'Enter repo password: ' && { read -r -s RESTIC_PASSWORD 2>/dev/null || read -r RESTIC_PASSWORD; } && echo; done
 
 # Choose action to be performed
-while [ -z "$action" ]; do echo 'Select action to perform:'; action=$(printf "restore\nbackup\n" | select_from_list -1); done 
+while [ -z "$action" ] && echo -n >/dev/tty; do echo 'Select action to perform:'; action=$(printf "restore\nbackup\n" | select_from_list -1); done 
 if [ "$action" = "restore" ]; then
 	restore "$@"
 elif [ "$action" = "backup" ]; then
