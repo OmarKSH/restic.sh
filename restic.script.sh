@@ -36,12 +36,12 @@ SELF="$pwd/$SELFNAME"
 select_from_list() {
 	[ "$FZF" != '0' ] && [ -x "$(command -v fzf)" ] && { fzf "$@" <&0; return $?; } \
 	|| { local line i=0 REPLY
-	{ [ ! -t 0 ] && while IFS= read -r line; do [ -z "$line" ] && continue; echo "$i) $line" >/dev/tty; eval "local line$i=\"$line\""; i=$((i+1)); done; true; }
-	# { while IFS= read -r line; do [ -z "$line" ] && continue; echo "$i) $line" >/dev/tty; eval "local line$i=\"$line\""; i=$((i+1)); done <<- EOF
+	{ [ ! -t 0 ] && while IFS= read -r line; do [ -z "$line" ] && continue; echo "$i) $line" >&2; eval "local line$i=\"$line\""; i=$((i+1)); done; true; }
+	# { while IFS= read -r line; do [ -z "$line" ] && continue; echo "$i) $line" >&2; eval "local line$i=\"$line\""; i=$((i+1)); done <<- EOF
 	# $(for i in "$@"; do echo "$i"; done)
 	# EOF
 	# }
-	echo -n "Enter choice number: " >/dev/tty && read -r REPLY </dev/tty && eval "echo -n \"\${line$REPLY}\"" && echo >/dev/tty; }
+	echo -n "Enter choice number: " >&2 && read -r REPLY </dev/tty && eval "echo -n \"\${line$REPLY}\"" && echo >&2; }
 }
 
 remount_exec() {
